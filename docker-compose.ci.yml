@@ -9,28 +9,38 @@ services:
       - MYSQL_PASSWORD=app
     ports:
       - "3307:3306"
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-proot"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
 
   player-service:
     image: ${REGISTRY_URL}/final-project-player-service:${IMAGE_TAG}
     container_name: ci-player-service
+    restart: on-failure
     environment:
       - PORT=3001
       - DATABASE_URL=mysql://app:app@mysql:3306/football
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
 
   game-service:
     image: ${REGISTRY_URL}/final-project-game-service:${IMAGE_TAG}
     container_name: ci-game-service
+    restart: on-failure
     environment:
       - PORT=3002
       - DATABASE_URL=mysql://app:app@mysql:3306/football
     depends_on:
-      - mysql
+      mysql:
+        condition: service_healthy
 
   team-service:
     image: ${REGISTRY_URL}/final-project-team-service:${IMAGE_TAG}
     container_name: ci-team-service
+    restart: on-failure
     environment:
       - PORT=3003
       - DATABASE_URL=mysql://app:app@mysql:3306/football
@@ -38,13 +48,17 @@ services:
       - PLAYER_SVC_URL=http://player-service:3001
       - HTTP_TIMEOUT_MS=3000
     depends_on:
-      - mysql
-      - game-service
-      - player-service
+      mysql:
+        condition: service_healthy
+      game-service:
+        condition: service_started
+      player-service:
+        condition: service_started
 
   result-service:
     image: ${REGISTRY_URL}/final-project-result-service:${IMAGE_TAG}
     container_name: ci-result-service
+    restart: on-failure
     environment:
       - PORT=3004
       - DATABASE_URL=mysql://app:app@mysql:3306/football
@@ -52,13 +66,17 @@ services:
       - TEAM_SVC_URL=http://team-service:3003
       - HTTP_TIMEOUT_MS=3000
     depends_on:
-      - mysql
-      - game-service
-      - team-service
+      mysql:
+        condition: service_healthy
+      game-service:
+        condition: service_started
+      team-service:
+        condition: service_started
 
   api-gateway:
     image: ${REGISTRY_URL}/final-project-api-gateway:${IMAGE_TAG}
     container_name: ci-api-gateway
+    restart: on-failure
     environment:
       - PORT=3000
       - PLAYER_SVC_URL=http://player-service:3001
@@ -72,7 +90,11 @@ services:
     ports:
       - "3000:3000"
     depends_on:
-      - player-service
-      - game-service
-      - team-service
-      - result-service
+      player-service:
+        condition: service_started
+      game-service:
+        condition: service_started
+      team-service:
+        condition: service_started
+      result-service:
+        condition: service_started

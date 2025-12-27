@@ -6,7 +6,7 @@ API_URL="${API_URL:-http://localhost:3000/api/v1}"
 wait_for_endpoint() {
   local url="$1"
   local label="$2"
-  local attempts=30
+  local attempts=10
   until curl -sSf "${url}" >/dev/null 2>&1; do
     attempts=$((attempts - 1))
     if [ "$attempts" -le 0 ]; then
@@ -36,9 +36,9 @@ echo "Waiting for Games endpoint..."
 wait_for_endpoint "${API_URL}/games" "Games endpoint"
 
 echo "Creating players..."
-create_player "p1" "John" "One" 7 80 >/dev/null
-create_player "p2" "Mike" "Two" 9 75 >/dev/null
-create_player "p3" "Alex" "Three" 11 90 >/dev/null
+create_player "test_p1" "John" "One" 1001 80 >/dev/null
+create_player "test_p2" "Mike" "Two" 1002 75 >/dev/null
+create_player "test_p3" "Alex" "Three" 1003 90 >/dev/null
 
 echo "Fetching players..."
 players_json=$(curl -sSf "${API_URL}/players?page=1&limit=10&sortBy=rating&order=desc&includeDeleted=false")

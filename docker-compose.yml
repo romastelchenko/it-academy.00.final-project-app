@@ -3,7 +3,7 @@ version: '3.9'
 services:
   mysql:
     build:
-      context: ./docker/mysql
+      context: ./mysql
     container_name: football-mysql
     environment:
       - MYSQL_ROOT_PASSWORD=root
