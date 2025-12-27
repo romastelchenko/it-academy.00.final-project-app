@@ -46,6 +46,10 @@ jobs:
         module: ${{ fromJson(needs.init.outputs.modules_for_tests) }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            ${{ matrix.module }}
+          sparse-checkout-cone-mode: false
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -74,6 +78,6 @@ jobs:
             ${{ matrix.dockerfile }}
           sparse-checkout-cone-mode: false
       - name: Lint Dockerfile
-        run: docker run --rm -i hadolint/hadolint < "${{ matrix.dockerfile }}"
+        run: docker run --rm -i hadolint/hadolint --failure-threshold error - < "${{ matrix.dockerfile }}"
       - name: Debug
         run: ls -l
