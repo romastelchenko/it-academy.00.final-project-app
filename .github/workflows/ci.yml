@@ -71,8 +71,9 @@ jobs:
       - uses: actions/checkout@v4
         with:
           sparse-checkout: |
-            ${{ matrix.dockerfile.path }}
+            ${{ matrix.dockerfile }}
           sparse-checkout-cone-mode: false
       - name: Lint Dockerfile
-        run: docker run --rm -i hadolint/hadolint < "${{ matrix.dockerfile.path }}"
-
+        run: docker run --rm -i hadolint/hadolint < "${{ matrix.dockerfile }}"
+      - name: Debug
+        run: ls -l
