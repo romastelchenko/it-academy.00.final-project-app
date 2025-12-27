@@ -11,7 +11,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       docker_files: ${{ steps.collect_docker.outputs.docker_files }}
-      module_dirs: ${{ steps.collect_docker.outputs.$module_dirs }}
+      module_dirs: ${{ steps.collect_docker.outputs.module_dirs }}
       modules_for_tests: ${{ steps.collect_modules_tests.outputs.modules_for_tests }}
 
     steps:
