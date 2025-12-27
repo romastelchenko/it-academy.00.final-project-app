@@ -3,12 +3,14 @@ set -euo pipefail
 
 API_URL="${API_URL:-http://localhost:3000/api/v1}"
 
-wait_for_gateway() {
+wait_for_endpoint() {
+  local url="$1"
+  local label="$2"
   local attempts=30
-  until curl -sSf "${API_URL}/health" >/dev/null 2>&1; do
+  until curl -sSf "${url}" >/dev/null 2>&1; do
     attempts=$((attempts - 1))
     if [ "$attempts" -le 0 ]; then
-      echo "Gateway did not become ready"
+      echo "${label} did not become ready"
       exit 1
     fi
     sleep 2
@@ -21,13 +23,17 @@ create_player() {
   local last="$3"
   local shirt="$4"
   local rating="$5"
-  curl -sSf -X POST "${API_URL}/players" \
+  curl -v -Sf -X POST "${API_URL}/players" \
     -H 'Content-Type: application/json' \
     -d "{\"nickname\":\"${nickname}\",\"firstName\":\"${first}\",\"lastName\":\"${last}\",\"shirtNumber\":${shirt},\"rating\":${rating}}"
 }
 
 echo "Waiting for API Gateway..."
-wait_for_gateway
+wait_for_endpoint "${API_URL}/health" "Gateway"
+echo "Waiting for Players endpoint..."
+wait_for_endpoint "${API_URL}/players?page=1&limit=1" "Players endpoint"
+echo "Waiting for Games endpoint..."
+wait_for_endpoint "${API_URL}/games" "Games endpoint"
 
 echo "Creating players..."
 create_player "p1" "John" "One" 7 80 >/dev/null
