@@ -78,6 +78,6 @@ jobs:
             ${{ matrix.dockerfile }}
           sparse-checkout-cone-mode: false
       - name: Lint Dockerfile
-        run: docker run --rm -i hadolint/hadolint --failure-threshold error - < "${{ matrix.dockerfile }}"
+        run: docker run --rm -i hadolint/hadolint hadolint --failure-threshold error - < "${{ matrix.dockerfile }}"
       - name: Debug
         run: ls -l
