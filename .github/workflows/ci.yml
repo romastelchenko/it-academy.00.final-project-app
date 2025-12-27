@@ -23,13 +23,13 @@ jobs:
             echo "module_dirs=[]" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          docker_files=$(printf '%s\n' "$files" | awk '{print "{\"path\":\""$0"\",\"dir\":\""dirname($0)"\"}"}' | jq -s .)
-          module_dirs=$(printf '%s\n' "$files" | xargs -n1 dirname | jq -R -s -c 'split("\n") | map(select(length>0))')
+          docker_files=$(printf '%s\n' "$files" | jq -R -s -c 'split("\n")[:-1]')
+          module_dirs=$(printf '%s\n' "$files" | xargs -n1 dirname | sort -u | jq -R -s -c 'split("\n")[:-1]')
           echo "docker_files=$docker_files" >> "$GITHUB_OUTPUT"
           echo "module_dirs=$module_dirs" >> "$GITHUB_OUTPUT"
       - name: Init modules for Tests
         run: |
-          modules_for_tests="api-gateway frontend"
+          modules_for_tests="[api-gateway, frontend]"
           echo "modules_for_tests=$modules_for_tests" >> "$GITHUB_OUTPUT"
 
   tests:
@@ -39,7 +39,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        module: ${{ needs.init.outputs.modules_for_tests }}
+        module: ${{ fromJson(needs.init.outputs.modules_for_tests) }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
