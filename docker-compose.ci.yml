@@ -1,0 +1,80 @@
+version: '3.9'
+
+services:
+  mysql:
+    image: ${REGISTRY_URL}/final-project-docker-mysql:${IMAGE_TAG}
+    container_name: ci-mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_DATABASE=football
+      - MYSQL_USER=app
+      - MYSQL_PASSWORD=app
+    ports:
+      - "3307:3306"
+
+  player-service:
+    image: ${REGISTRY_URL}/final-project-player-service:${IMAGE_TAG}
+    container_name: ci-player-service
+    environment:
+      - PORT=3001
+      - DATABASE_URL=mysql://app:app@mysql:3306/football
+    depends_on:
+      - mysql
+
+  game-service:
+    image: ${REGISTRY_URL}/final-project-game-service:${IMAGE_TAG}
+    container_name: ci-game-service
+    environment:
+      - PORT=3002
+      - DATABASE_URL=mysql://app:app@mysql:3306/football
+    depends_on:
+      - mysql
+
+  team-service:
+    image: ${REGISTRY_URL}/final-project-team-service:${IMAGE_TAG}
+    container_name: ci-team-service
+    environment:
+      - PORT=3003
+      - DATABASE_URL=mysql://app:app@mysql:3306/football
+      - GAME_SVC_URL=http://game-service:3002
+      - PLAYER_SVC_URL=http://player-service:3001
+      - HTTP_TIMEOUT_MS=3000
+    depends_on:
+      - mysql
+      - game-service
+      - player-service
+
+  result-service:
+    image: ${REGISTRY_URL}/final-project-result-service:${IMAGE_TAG}
+    container_name: ci-result-service
+    environment:
+      - PORT=3004
+      - DATABASE_URL=mysql://app:app@mysql:3306/football
+      - GAME_SVC_URL=http://game-service:3002
+      - TEAM_SVC_URL=http://team-service:3003
+      - HTTP_TIMEOUT_MS=3000
+    depends_on:
+      - mysql
+      - game-service
+      - team-service
+
+  api-gateway:
+    image: ${REGISTRY_URL}/final-project-api-gateway:${IMAGE_TAG}
+    container_name: ci-api-gateway
+    environment:
+      - PORT=3000
+      - PLAYER_SVC_URL=http://player-service:3001
+      - GAME_SVC_URL=http://game-service:3002
+      - TEAM_SVC_URL=http://team-service:3003
+      - RESULT_SVC_URL=http://result-service:3004
+      - HTTP_TIMEOUT_MS=3000
+      - MAX_RESPONSE_BYTES=1048576
+      - BODY_LIMIT=1mb
+      - LOG_LEVEL=info
+    ports:
+      - "3000:3000"
+    depends_on:
+      - player-service
+      - game-service
+      - team-service
+      - result-service

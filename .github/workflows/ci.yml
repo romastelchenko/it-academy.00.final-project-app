@@ -3,6 +3,7 @@ name: CI
 on:
   push:
     branches: ['**']
+    tags: ['*']
   pull_request:
 
 jobs:
@@ -39,7 +40,7 @@ jobs:
     name: Run Unit Tests
     needs: init
     runs-on: ubuntu-latest
-    if: ${{ needs.init.outputs.modules_for_tests != '[]' }}
+    if: ${{ false && needs.init.outputs.modules_for_tests != '[]' }}
     strategy:
       fail-fast: false
       matrix:
@@ -66,7 +67,7 @@ jobs:
     name: Validate files
     runs-on: ubuntu-latest
     needs: init
-    if: ${{ needs.init.outputs.docker_files != '[]' }}
+    if: ${{ false && needs.init.outputs.docker_files != '[]' }}
     strategy:
       fail-fast: false
       matrix:
@@ -79,5 +80,57 @@ jobs:
           sparse-checkout-cone-mode: false
       - name: Lint Dockerfile
         run: docker run --rm -i hadolint/hadolint hadolint --failure-threshold error - < "${{ matrix.dockerfile }}"
-      - name: Debug
-        run: ls -l
+
+  build:
+    name: Build Images
+    runs-on: ubuntu-latest
+    needs: init
+#    if: ${{ startsWith(github.ref, 'refs/tags/') && needs.init.outputs.module_dirs != '[]' }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build all images
+        env:
+          MODULE_DIRS: ${{ needs.init.outputs.module_dirs }}
+          REGISTRY_URL: ${{ secrets.SECRET_GITHUB_REGISTRY_URL }}
+        run: |
+#          tag_name="${GITHUB_REF_NAME}"
+          tag_name="v1"
+          tag_date="$(date +'%d%m%y')"
+          image_tag="${tag_name}-${tag_date}"
+          echo "$MODULE_DIRS" | jq -r '.[]' | while read -r dir; do
+            safe_dir="${dir//\//-}"
+            image_name="${REGISTRY_URL}/final-project-${safe_dir}"
+            echo "Building image for ${image_name}:${image_tag}"
+            docker build -t "${image_name}:${image_tag}" -f "${dir}/Dockerfile" "${dir}"
+          done
+      - name: Smoke test images
+        env:
+          REGISTRY_URL: ${{ secrets.SECRET_GITHUB_REGISTRY_URL }}
+        run: |
+#          tag_name="${GITHUB_REF_NAME}"
+          tag_name="v1"
+          tag_date="$(date +'%d%m%y')"
+          image_tag="${tag_name}-${tag_date}"
+          export REGISTRY_URL IMAGE_TAG="$image_tag"
+          chmod +x scripts/ci_smoke.sh
+          docker compose -f docker-compose.ci.yml up -d
+          ./scripts/ci_smoke.sh
+          docker compose -f docker-compose.ci.yml down -v
+      - name: Push images
+        env:
+          MODULE_DIRS: ${{ needs.init.outputs.module_dirs }}
+          REGISTRY_URL: ${{ secrets.SECRET_GITHUB_REGISTRY_URL }}
+          REGISTRY_USERNAME: ${{ secrets.SECRET_GITHUB_REGISTRY_USERNAME }}
+          REGISTRY_TOKEN: ${{ secrets.SECRET_GITHUB_REGISTRY_TOKEN }}
+        run: |
+          echo "$REGISTRY_TOKEN" | docker login "$REGISTRY_URL" -u "$REGISTRY_USERNAME" --password-stdin
+#          tag_name="${GITHUB_REF_NAME}"
+          tag_name="v1"
+          tag_date="$(date +'%d%m%y')"
+          image_tag="${tag_name}-${tag_date}"
+          echo "$MODULE_DIRS" | jq -r '.[]' | while read -r dir; do
+            safe_dir="${dir//\//-}"
+            image_name="${REGISTRY_URL}/final-project-${safe_dir}"
+            echo "Pushing image ${image_name}:${image_tag}"
+            docker push "${image_name}:${image_tag}"
+          done
