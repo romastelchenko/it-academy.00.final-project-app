@@ -27,7 +27,7 @@ jobs:
           module_dirs=$(printf '%s\n' "$files" | xargs -n1 dirname | jq -R -s -c 'split("\n") | map(select(length>0))')
           echo "docker_files=$docker_files" >> "$GITHUB_OUTPUT"
           echo "module_dirs=$module_dirs" >> "$GITHUB_OUTPUT"
-        name: Init modules for Tests
+      - name: Init modules for Tests
         run: |
           modules_for_tests="api-gateway frontend"
           echo "modules_for_tests=$modules_for_tests" >> "$GITHUB_OUTPUT"
@@ -53,4 +53,3 @@ jobs:
       - name: Run unit tests
         run: npm run test:unit
         working-directory: ${{ matrix.module }}
-
