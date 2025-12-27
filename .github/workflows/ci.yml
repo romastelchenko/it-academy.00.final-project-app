@@ -10,12 +10,14 @@ jobs:
     name: "Init step"
     runs-on: ubuntu-latest
     outputs:
-      dockerfiles: ${{ steps.collect.outputs.dockerfiles }}
-      imagedirs: ${{ steps.collect.outputs.imagedirs }}
+      docker_files: ${{ steps.collect_docker.outputs.docker_files }}
+      module_dirs: ${{ steps.collect_docker.outputs.$module_dirs }}
+      modules_for_tests: ${{ steps.collect_modules_tests.outputs.modules_for_tests }}
+
     steps:
       - uses: actions/checkout@v4
-      - id: collect
-        name: Collect Dockerfiles and module directories to build
+      - name: Collect Dockerfiles and module directories to build
+        id: collect_docker
         run: |
           files=$(git ls-files '*/Dockerfile')
           if [ -z "$files" ]; then
@@ -28,6 +30,7 @@ jobs:
           echo "docker_files=$docker_files" >> "$GITHUB_OUTPUT"
           echo "module_dirs=$module_dirs" >> "$GITHUB_OUTPUT"
       - name: Init modules for Tests
+        id: collect_modules_tests
         run: |
           modules_for_tests="[api-gateway, frontend]"
           echo "modules_for_tests=$modules_for_tests" >> "$GITHUB_OUTPUT"
