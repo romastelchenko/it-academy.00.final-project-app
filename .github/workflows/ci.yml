@@ -94,7 +94,7 @@ jobs:
           REGISTRY_URL: ${{ secrets.SECRET_GITHUB_REGISTRY_URL }}
         run: |
           tag_name="${GITHUB_REF_NAME}"
-          tag_name="v1"
+          tag_name="test"
           tag_date="$(date +'%d%m%y')"
           image_tag="${tag_name}-${tag_date}"
           echo "$MODULE_DIRS" | jq -r '.[]' | while read -r dir; do
@@ -108,7 +108,7 @@ jobs:
           REGISTRY_URL: ${{ secrets.SECRET_GITHUB_REGISTRY_URL }}
         run: |
           tag_name="${GITHUB_REF_NAME}"
-          tag_name="v1"
+          tag_name="test"
           tag_date="$(date +'%d%m%y')"
           image_tag="${tag_name}-${tag_date}"
           export REGISTRY_URL IMAGE_TAG="$image_tag"
@@ -124,8 +124,8 @@ jobs:
           REGISTRY_TOKEN: ${{ secrets.SECRET_GITHUB_REGISTRY_TOKEN }}
         run: |
           echo "$REGISTRY_TOKEN" | docker login "$REGISTRY_URL" -u "$REGISTRY_USERNAME" --password-stdin
-#          tag_name="${GITHUB_REF_NAME}"
-          tag_name="v1"
+          tag_name="${GITHUB_REF_NAME}"
+          tag_name="test"
           tag_date="$(date +'%d%m%y')"
           image_tag="${tag_name}-${tag_date}"
           echo "$MODULE_DIRS" | jq -r '.[]' | while read -r dir; do
