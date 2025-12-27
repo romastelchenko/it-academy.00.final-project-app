@@ -1,0 +1,41 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum ResultFormat {
+  TWO_TEAMS
+  THREE_TEAMS
+}
+
+model GameResult {
+  id        BigInt       @id @default(autoincrement())
+  gameId    BigInt       @unique @map("game_id")
+  format    ResultFormat
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  lines ResultLine[]
+
+  @@map("game_results")
+}
+
+model ResultLine {
+  id           BigInt   @id @default(autoincrement())
+  gameResultId BigInt   @map("game_result_id")
+  teamAId      BigInt   @map("team_a_id")
+  teamBId      BigInt   @map("team_b_id")
+  scoreA       Int      @map("score_a")
+  scoreB       Int      @map("score_b")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  gameResult GameResult @relation(fields: [gameResultId], references: [id], onDelete: Cascade)
+
+  @@unique([gameResultId, teamAId, teamBId])
+  @@map("result_lines")
+}

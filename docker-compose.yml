@@ -1,0 +1,103 @@
+version: '3.9'
+
+services:
+  mysql:
+    build:
+      context: ./docker/mysql
+    container_name: football-mysql
+    environment:
+      - MYSQL_ROOT_PASSWORD=root
+      - MYSQL_DATABASE=football
+      - MYSQL_USER=app
+      - MYSQL_PASSWORD=app
+    ports:
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  player-service:
+    build:
+      context: ./player-service
+    container_name: player-service
+    environment:
+      - PORT=3001
+      - DATABASE_URL=mysql://app:app@mysql:3306/football
+    ports:
+      - "3001:3001"
+    depends_on:
+      - mysql
+  game-service:
+    build:
+      context: ./game-service
+    container_name: game-service
+    environment:
+      - PORT=3002
+      - DATABASE_URL=mysql://app:app@mysql:3306/football
+    ports:
+      - "3002:3002"
+    depends_on:
+      - mysql
+  team-service:
+    build:
+      context: ./team-service
+    container_name: team-service
+    environment:
+      - PORT=3003
+      - DATABASE_URL=mysql://app:app@mysql:3306/football
+      - GAME_SVC_URL=http://game-service:3002
+      - PLAYER_SVC_URL=http://player-service:3001
+      - HTTP_TIMEOUT_MS=3000
+    ports:
+      - "3003:3003"
+    depends_on:
+      - mysql
+      - game-service
+      - player-service
+  result-service:
+    build:
+      context: ./result-service
+    container_name: result-service
+    environment:
+      - PORT=3004
+      - DATABASE_URL=mysql://app:app@mysql:3306/football
+      - GAME_SVC_URL=http://game-service:3002
+      - TEAM_SVC_URL=http://team-service:3003
+      - HTTP_TIMEOUT_MS=3000
+    ports:
+      - "3004:3004"
+    depends_on:
+      - mysql
+      - game-service
+      - team-service
+  api-gateway:
+    build:
+      context: ./api-gateway
+    container_name: api-gateway
+    environment:
+      - PORT=3000
+      - PLAYER_SVC_URL=http://player-service:3001
+      - GAME_SVC_URL=http://game-service:3002
+      - TEAM_SVC_URL=http://team-service:3003
+      - RESULT_SVC_URL=http://result-service:3004
+      - HTTP_TIMEOUT_MS=3000
+      - MAX_RESPONSE_BYTES=1048576
+      - BODY_LIMIT=1mb
+      - LOG_LEVEL=info
+    ports:
+      - "3000:3000"
+    depends_on:
+      - player-service
+      - game-service
+      - team-service
+      - result-service
+  frontend:
+    build:
+      context: ./frontend
+    container_name: frontend
+    ports:
+      - "8080:80"
+    depends_on:
+      - api-gateway
+
+volumes:
+  mysql_data:

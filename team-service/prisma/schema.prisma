@@ -1,0 +1,76 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+enum TeamSetMode {
+  AUTO
+  MANUAL
+}
+
+enum TeamSetStatus {
+  DRAFT
+  LOCKED
+}
+
+model Game {
+  id        BigInt   @id @default(autoincrement())
+  startsAt  DateTime @map("starts_at")
+  location  String   @db.VarChar(255)
+  status    String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  teamSets TeamSet[]
+
+  @@map("games")
+}
+
+model TeamSet {
+  id        BigInt       @id @default(autoincrement())
+  gameId    BigInt       @map("game_id")
+  mode      TeamSetMode
+  status    TeamSetStatus @default(DRAFT)
+  version   Int
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  game  Game   @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  teams Team[]
+
+  @@unique([gameId, version])
+  @@map("team_sets")
+}
+
+model Team {
+  id         BigInt   @id @default(autoincrement())
+  teamSetId  BigInt   @map("team_set_id")
+  name       String   @db.VarChar(50)
+  orderIndex Int      @map("order_index")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  teamSet TeamSet @relation(fields: [teamSetId], references: [id], onDelete: Cascade)
+  players TeamPlayer[]
+
+  @@unique([teamSetId, orderIndex])
+  @@map("teams")
+}
+
+model TeamPlayer {
+  id        BigInt   @id @default(autoincrement())
+  teamId    BigInt   @map("team_id")
+  playerId  BigInt   @map("player_id")
+  position  String?  @db.VarChar(50)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([teamId, playerId])
+  @@map("team_players")
+}

@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+jobs:
+  init:
+    name: "Init step"
+    runs-on: ubuntu-latest
+    outputs:
+      dockerfiles: ${{ steps.collect.outputs.dockerfiles }}
+      imagedirs: ${{ steps.collect.outputs.imagedirs }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: collect
+        name: Collect Dockerfiles and module directories to build
+        run: |
+          files=$(git ls-files '*/Dockerfile')
+          if [ -z "$files" ]; then
+            echo "docker_files=[]" >> "$GITHUB_OUTPUT"
+            echo "module_dirs=[]" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          docker_files=$(printf '%s\n' "$files" | awk '{print "{\"path\":\""$0"\",\"dir\":\""dirname($0)"\"}"}' | jq -s .)
+          module_dirs=$(printf '%s\n' "$files" | xargs -n1 dirname | jq -R -s -c 'split("\n") | map(select(length>0))')
+          echo "docker_files=$docker_files" >> "$GITHUB_OUTPUT"
+          echo "module_dirs=$module_dirs" >> "$GITHUB_OUTPUT"
+        name: Init modules for Tests
+        run: |
+          modules_for_tests="api-gateway frontend"
+          echo "modules_for_tests=$modules_for_tests" >> "$GITHUB_OUTPUT"
+
+  tests:
+    name: Run Unit Tests
+    runs-on: ubuntu-latest
+    if: ${{ needs.init.outputs.modules_for_tests != '[]' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        module: ${{ needs.init.outputs.modules_for_tests }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: ${{ matrix.module }}/package-lock.json
+      - name: Install
+        run: npm ci
+        working-directory: ${{ matrix.module }}
+      - name: Run unit tests
+        run: npm run test:unit
+        working-directory: ${{ matrix.module }}
+
