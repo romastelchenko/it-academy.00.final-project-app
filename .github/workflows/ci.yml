@@ -32,11 +32,12 @@ jobs:
       - name: Init modules for Tests
         id: collect_modules_tests
         run: |
-          modules_for_tests="[api-gateway, frontend]"
+          modules_for_tests='["api-gateway","frontend"]'
           echo "modules_for_tests=$modules_for_tests" >> "$GITHUB_OUTPUT"
 
   tests:
     name: Run Unit Tests
+    needs: init
     runs-on: ubuntu-latest
     if: ${{ needs.init.outputs.modules_for_tests != '[]' }}
     strategy:
