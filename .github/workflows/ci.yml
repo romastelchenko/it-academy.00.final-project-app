@@ -57,3 +57,22 @@ jobs:
       - name: Run unit tests
         run: npm run test:unit
         working-directory: ${{ matrix.module }}
+
+  validate:
+    name: Validate files
+    runs-on: ubuntu-latest
+    needs: init
+    if: ${{ needs.init.outputs.docker_files != '[]' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        dockerfile: ${{ fromJson(needs.init.outputs.docker_files) }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            ${{ matrix.dockerfile.path }}
+          sparse-checkout-cone-mode: false
+      - name: Lint Dockerfile
+        run: docker run --rm -i hadolint/hadolint < "${{ matrix.dockerfile.path }}"
+
