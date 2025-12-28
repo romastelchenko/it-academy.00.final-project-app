@@ -94,6 +94,8 @@ services:
     build:
       context: ./frontend
     container_name: frontend
+    environment:
+      - API_GATEWAY_URL=http://api-gateway:3000
     ports:
       - "8080:80"
     depends_on:

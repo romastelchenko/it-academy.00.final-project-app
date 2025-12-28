@@ -14,7 +14,11 @@ export async function apiFetch<T>(path: string, options: RequestInit = {}): Prom
     headers.set('Content-Type', 'application/json');
   }
   if (!headers.has('x-request-id')) {
-    headers.set('x-request-id', crypto.randomUUID());
+    const requestId =
+      typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function'
+        ? crypto.randomUUID()
+        : Math.random().toString(16).slice(2);
+    headers.set('x-request-id', requestId);
   }
 
   const response = await fetch(`${baseUrl}${path}`, {
