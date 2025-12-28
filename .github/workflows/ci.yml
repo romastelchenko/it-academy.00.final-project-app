@@ -86,23 +86,48 @@ jobs:
     runs-on: ubuntu-latest
     needs: [init, tests, validate]
     #if: ${{ startsWith(github.ref, 'refs/tags/') && needs.init.outputs.module_dirs != '[]' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        dir: ${{ fromJson(needs.init.outputs.module_dirs) }}
     steps:
       - uses: actions/checkout@v4
-      - name: Build all images
+      - name: Build image
         env:
-          MODULE_DIRS: ${{ needs.init.outputs.module_dirs }}
           REGISTRY_URL: ${{ secrets.SECRET_GITHUB_REGISTRY_URL }}
         run: |
           tag_name="${GITHUB_REF_NAME}"
           tag_name="test"
           tag_date="$(date +'%d%m%y')"
           image_tag="${tag_name}-${tag_date}"
-          echo "$MODULE_DIRS" | jq -r '.[]' | while read -r dir; do
-            safe_dir="${dir//\//-}"
-            image_name="${REGISTRY_URL}/final-project-${safe_dir}"
-            echo "Building image for ${image_name}:${image_tag}"
-            docker build -t "${image_name}:${image_tag}" -f "${dir}/Dockerfile" "${dir}"
-          done
+          safe_dir="${{ matrix.dir }}"
+          safe_dir="${safe_dir//\//-}"
+          image_name="${REGISTRY_URL}/final-project-${safe_dir}"
+          echo "Building image for ${image_name}:${image_tag}"
+          docker build -t "${image_name}:${image_tag}" -f "${{ matrix.dir }}/Dockerfile" "${{ matrix.dir }}"
+      - name: Push images
+        env:
+          REGISTRY_URL: ${{ secrets.SECRET_GITHUB_REGISTRY_URL }}
+          REGISTRY_USERNAME: ${{ secrets.SECRET_GITHUB_REGISTRY_USERNAME }}
+          REGISTRY_TOKEN: ${{ secrets.SECRET_GITHUB_REGISTRY_TOKEN }}
+        run: |
+          echo "$REGISTRY_TOKEN" | docker login "$REGISTRY_URL" -u "$REGISTRY_USERNAME" --password-stdin
+          tag_name="${GITHUB_REF_NAME}"
+          tag_name="test"
+          tag_date="$(date +'%d%m%y')"
+          image_tag="${tag_name}-${tag_date}"
+          safe_dir="${{ matrix.dir }}"
+          safe_dir="${safe_dir//\//-}"
+          image_name="${REGISTRY_URL}/final-project-${safe_dir}"
+          echo "Pushing image ${image_name}:${image_tag}"
+          docker push "${image_name}:${image_tag}"
+
+  smoke_test:
+    name: Smoke Test Images
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/checkout@v4
       - name: Smoke test images
         env:
           REGISTRY_URL: ${{ secrets.SECRET_GITHUB_REGISTRY_URL }}
@@ -113,32 +138,14 @@ jobs:
           image_tag="${tag_name}-${tag_date}"
           export REGISTRY_URL IMAGE_TAG="$image_tag"
           chmod +x scripts/ci_smoke.sh
-          docker compose -f docker-compose.ci.yml up -d --pull=never
+          docker compose -f docker-compose.ci.yml up -d --pull=always
           ./scripts/ci_smoke.sh
           docker compose -f docker-compose.ci.yml down -v
-      - name: Push images
-        env:
-          MODULE_DIRS: ${{ needs.init.outputs.module_dirs }}
-          REGISTRY_URL: ${{ secrets.SECRET_GITHUB_REGISTRY_URL }}
-          REGISTRY_USERNAME: ${{ secrets.SECRET_GITHUB_REGISTRY_USERNAME }}
-          REGISTRY_TOKEN: ${{ secrets.SECRET_GITHUB_REGISTRY_TOKEN }}
-        run: |
-          echo "$REGISTRY_TOKEN" | docker login "$REGISTRY_URL" -u "$REGISTRY_USERNAME" --password-stdin
-          tag_name="${GITHUB_REF_NAME}"
-          tag_name="test"
-          tag_date="$(date +'%d%m%y')"
-          image_tag="${tag_name}-${tag_date}"
-          echo "$MODULE_DIRS" | jq -r '.[]' | while read -r dir; do
-            safe_dir="${dir//\//-}"
-            image_name="${REGISTRY_URL}/final-project-${safe_dir}"
-            echo "Pushing image ${image_name}:${image_tag}"
-            docker push "${image_name}:${image_tag}"
-          done
 
   update_helm:
     name: Update Helm appVersion
     runs-on: ubuntu-latest
-    needs: build
+    needs: smoke_test
     steps:
       - name: Checkout helm repo
         uses: actions/checkout@v4
@@ -159,7 +166,13 @@ jobs:
             exit 1
           fi
           sed -i -E "s/^appVersion:.*/appVersion: \"${image_tag}\"/" "${chart_dir}/Chart.yaml"
+          current_version=$(grep -E '^version:' "${chart_dir}/Chart.yaml" | awk '{print $2}' | tr -d '"')
+          IFS='.' read -r major minor patch <<< "$current_version"
+          patch=$((patch + 1))
+          chart_version="${major}.${minor}.${patch}"
+          sed -i -E "s/^version:.*/version: \"${chart_version}\"/" "${chart_dir}/Chart.yaml"
           echo "Updated appVersion to ${image_tag}"
+          echo "Updated version to ${chart_version}"
       - name: Package chart and update index
         run: |
           chart_dir="helm-sources/football-app"
@@ -186,7 +199,7 @@ jobs:
 
   notify_with_results:
     runs-on: ubuntu-latest
-    needs: [init, tests, validate, build, update_helm]
+    needs: [init, tests, validate, build, smoke_test, update_helm]
     if: always()
     steps:
 
@@ -196,6 +209,7 @@ jobs:
           TESTS_RESULT: ${{ needs.tests.result }}
           VALIDATION_RESULT: ${{ needs.validate.result }}
           BUILD_RESULT: ${{ needs.build.result }}
+          SMOKE_RESULT: ${{ needs.smoke_test.result }}
           HELM_RESULT: ${{ needs.update_helm.result }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
@@ -204,6 +218,7 @@ jobs:
           message+="Tests: ${TESTS_RESULT}\n"
           message+="Validation: ${VALIDATION_RESULT}\n"
           message+="Build: ${BUILD_RESULT}\n"
+          message+="Smoke: ${SMOKE_RESULT}\n"
           message+="Helm: ${HELM_RESULT}"
           message_body_pattern='{"text":"%s"}'
           message_body=$(printf "${message_body_pattern}" "${message}")
