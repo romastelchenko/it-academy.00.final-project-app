@@ -218,9 +218,10 @@ jobs:
             const results = [];
             const aggregate = {};
             for (const job of data.jobs) {
-              if (job.name === 'Send slack notification') {
+              if (job.name === 'Send slack notification' || job.name === 'notify_with_results') {
                 continue;
               }
+              const baseName = job.name.split(' (')[0];
               let seconds = null;
               if (job.started_at && job.completed_at) {
                 const start = new Date(job.started_at).getTime();
@@ -228,20 +229,20 @@ jobs:
                 seconds = Math.max(0, Math.round((end - start) / 1000));
               }
               results.push({
-                name: job.name,
+                name: baseName,
                 status: job.conclusion || job.status,
                 duration: seconds,
               });
 
-              if (!aggregate[job.name]) {
-                aggregate[job.name] = {
-                  name: job.name,
+              if (!aggregate[baseName]) {
+                aggregate[baseName] = {
+                  name: baseName,
                   status: job.conclusion || job.status,
                   started_at: job.started_at,
                   completed_at: job.completed_at,
                 };
               } else {
-                const entry = aggregate[job.name];
+                const entry = aggregate[baseName];
                 entry.started_at = entry.started_at && job.started_at
                   ? (new Date(entry.started_at) < new Date(job.started_at) ? entry.started_at : job.started_at)
                   : entry.started_at || job.started_at;
