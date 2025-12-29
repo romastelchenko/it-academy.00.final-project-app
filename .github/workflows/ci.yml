@@ -216,7 +216,11 @@ jobs:
               per_page: 100,
             });
             const results = [];
+            const aggregate = {};
             for (const job of data.jobs) {
+              if (job.name === 'Send slack notification') {
+                continue;
+              }
               let seconds = null;
               if (job.started_at && job.completed_at) {
                 const start = new Date(job.started_at).getTime();
@@ -228,8 +232,41 @@ jobs:
                 status: job.conclusion || job.status,
                 duration: seconds,
               });
+
+              if (!aggregate[job.name]) {
+                aggregate[job.name] = {
+                  name: job.name,
+                  status: job.conclusion || job.status,
+                  started_at: job.started_at,
+                  completed_at: job.completed_at,
+                };
+              } else {
+                const entry = aggregate[job.name];
+                entry.started_at = entry.started_at && job.started_at
+                  ? (new Date(entry.started_at) < new Date(job.started_at) ? entry.started_at : job.started_at)
+                  : entry.started_at || job.started_at;
+                entry.completed_at = entry.completed_at && job.completed_at
+                  ? (new Date(entry.completed_at) > new Date(job.completed_at) ? entry.completed_at : job.completed_at)
+                  : entry.completed_at || job.completed_at;
+                if (entry.status !== 'failure' && (job.conclusion || job.status) === 'failure') {
+                  entry.status = 'failure';
+                }
+              }
             }
-            core.setOutput('results', JSON.stringify(results));
+            const aggregatedResults = Object.values(aggregate).map((entry) => {
+              let duration = null;
+              if (entry.started_at && entry.completed_at) {
+                const start = new Date(entry.started_at).getTime();
+                const end = new Date(entry.completed_at).getTime();
+                duration = Math.max(0, Math.round((end - start) / 1000));
+              }
+              return {
+                name: entry.name,
+                status: entry.status,
+                duration,
+              };
+            });
+            core.setOutput('results', JSON.stringify(aggregatedResults));
 
       - name: Send slack notification
         env:
@@ -269,9 +306,10 @@ jobs:
             message+="New Helm chart version: ${CHART_VERSION}\n"
           fi
           message+="\nJob details:\n"
-          echo "$RESULTS_JSON" | jq -r '.[] | [.name, .status, .duration] | @tsv' | while IFS=$'\t' read -r name status duration; do
+          lines=$(echo "$RESULTS_JSON" | jq -r '.[] | [.name, .status, .duration] | @tsv')
+          while IFS=$'\t' read -r name status duration; do
             message+=$(format_job_result "$name" "$status" "$duration")
-          done
+          done <<< "$lines"
           message_body_pattern='{"text":"%s"}'
           message_body=$(printf "${message_body_pattern}" "${message}")
           curl -X POST -H 'Content-type: application/json' --data "${message_body}" ${SLACK_WEBHOOK_URL}
