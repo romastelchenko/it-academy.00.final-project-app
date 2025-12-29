@@ -43,10 +43,10 @@ create_player "test_p3" "Alex" "Three" 1003 90 >/dev/null
 echo "Fetching players..."
 players_json=$(curl -sSf "${API_URL}/players?page=1&limit=10&sortBy=rating&order=desc&includeDeleted=false")
 players_count=$(echo "$players_json" | jq -r '.items | length')
-#if [ "$players_count" -lt 3 ]; then
-#  echo "Expected at least 3 players, got ${players_count}"
-#  exit 1
-#fi
+if [ "$players_count" -lt 3 ]; then
+  echo "Expected at least 3 players, got ${players_count}"
+  exit 1
+fi
 
 echo "Creating game..."
 game_payload='{"startsAt":"2025-01-01T10:00:00Z","location":"CI Arena"}'
