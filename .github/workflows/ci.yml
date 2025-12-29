@@ -316,4 +316,3 @@ jobs:
           message_body_pattern='{"text":"%s"}'
           message_body=$(printf "${message_body_pattern}" "${message}")
           curl -X POST -H 'Content-type: application/json' --data "${message_body}" ${SLACK_WEBHOOK_URL}
-          

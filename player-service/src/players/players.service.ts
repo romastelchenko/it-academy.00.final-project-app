@@ -52,7 +52,7 @@ export class PlayersService {
     ]);
 
     return {
-      items: items.map(serializePlayer),
+      items: null,
       total,
       page: query.page,
       limit: query.limit,

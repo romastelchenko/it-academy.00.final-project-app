@@ -29,7 +29,7 @@ export function AppShell() {
             <Typography variant="h6" sx={{ fontWeight: 700 }}>
               Football Club
             </Typography>
-            <Chip label="v1" size="small" />
+            <Chip label="v2" size="small" />
           </Box>
           <Typography variant="body2" color="text.secondary">
             Team Ops
