@@ -14,6 +14,7 @@ jobs:
       docker_files: ${{ steps.collect_docker.outputs.docker_files }}
       module_dirs: ${{ steps.collect_docker.outputs.module_dirs }}
       modules_for_tests: ${{ steps.collect_modules_tests.outputs.modules_for_tests }}
+      image_tag: ${{ steps.compute_tag.outputs.image_tag }}
 
     steps:
       - uses: actions/checkout@v4
@@ -35,6 +36,14 @@ jobs:
         run: |
           modules_for_tests='["api-gateway","frontend"]'
           echo "modules_for_tests=$modules_for_tests" >> "$GITHUB_OUTPUT"
+      - name: Compute image tag
+        id: compute_tag
+        run: |
+          # tag_name="test"
+          git_tag_name="${GITHUB_REF_NAME}"
+          tag_date="$(date +'%d%m%y')"
+          image_tag="${git_tag_name}-${tag_date}"
+          echo "image_tag=$image_tag" >> "$GITHUB_OUTPUT"
 
   tests:
     name: Run Unit Tests
@@ -64,7 +73,7 @@ jobs:
         working-directory: ${{ matrix.module }}
 
   validate:
-    name: Validate files
+    name: Validate Dockerfiles
     runs-on: ubuntu-latest
     needs: init
     if: ${{ needs.init.outputs.docker_files != '[]' }}
@@ -82,48 +91,42 @@ jobs:
         run: docker run --rm -i hadolint/hadolint hadolint --failure-threshold error - < "${{ matrix.dockerfile }}"
 
   build:
-    name: Build Images
+    name: Build and Push Images
     runs-on: ubuntu-latest
     needs: [init, tests, validate]
-    #if: ${{ startsWith(github.ref, 'refs/tags/') && needs.init.outputs.module_dirs != '[]' }}
+    if: ${{ startsWith(github.ref, 'refs/tags/') && needs.init.outputs.module_dirs != '[]' }}
     strategy:
       fail-fast: false
       matrix:
         dir: ${{ fromJson(needs.init.outputs.module_dirs) }}
     steps:
       - uses: actions/checkout@v4
-      - name: Build image
+      - name: Build Image
         env:
           REGISTRY_URL: ${{ secrets.SECRET_GITHUB_REGISTRY_URL }}
         run: |
-          tag_name="${GITHUB_REF_NAME}"
-          tag_name="test"
-          tag_date="$(date +'%d%m%y')"
-          image_tag="${tag_name}-${tag_date}"
+          image_tag="${{ needs.init.outputs.image_tag }}"
           safe_dir="${{ matrix.dir }}"
           safe_dir="${safe_dir//\//-}"
           image_name="${REGISTRY_URL}/final-project-${safe_dir}"
           echo "Building image for ${image_name}:${image_tag}"
           docker build -t "${image_name}:${image_tag}" -f "${{ matrix.dir }}/Dockerfile" "${{ matrix.dir }}"
-      - name: Push images
+      - name: Push Image
         env:
           REGISTRY_URL: ${{ secrets.SECRET_GITHUB_REGISTRY_URL }}
           REGISTRY_USERNAME: ${{ secrets.SECRET_GITHUB_REGISTRY_USERNAME }}
           REGISTRY_TOKEN: ${{ secrets.SECRET_GITHUB_REGISTRY_TOKEN }}
         run: |
           echo "$REGISTRY_TOKEN" | docker login "$REGISTRY_URL" -u "$REGISTRY_USERNAME" --password-stdin
-          tag_name="${GITHUB_REF_NAME}"
-          tag_name="test"
-          tag_date="$(date +'%d%m%y')"
-          image_tag="${tag_name}-${tag_date}"
+          image_tag="${{ needs.init.outputs.image_tag }}"
           safe_dir="${{ matrix.dir }}"
           safe_dir="${safe_dir//\//-}"
           image_name="${REGISTRY_URL}/final-project-${safe_dir}"
           echo "Pushing image ${image_name}:${image_tag}"
           docker push "${image_name}:${image_tag}"
 
-  smoke_test:
-    name: Smoke Test Images
+  integration_test:
+    name: Run Integration Tests
     runs-on: ubuntu-latest
     needs: build
     steps:
@@ -132,10 +135,7 @@ jobs:
         env:
           REGISTRY_URL: ${{ secrets.SECRET_GITHUB_REGISTRY_URL }}
         run: |
-          tag_name="${GITHUB_REF_NAME}"
-          tag_name="test"
-          tag_date="$(date +'%d%m%y')"
-          image_tag="${tag_name}-${tag_date}"
+          image_tag="${{ needs.init.outputs.image_tag }}"
           export REGISTRY_URL IMAGE_TAG="$image_tag"
           chmod +x scripts/ci_smoke.sh
           docker compose -f docker-compose.ci.yml up -d --pull=always
@@ -143,9 +143,11 @@ jobs:
           docker compose -f docker-compose.ci.yml down -v
 
   update_helm:
-    name: Update Helm appVersion
+    name: Update Helm Repo
     runs-on: ubuntu-latest
-    needs: smoke_test
+    needs: integration_test
+    outputs:
+      chart_version: ${{ steps.update_chart.outputs.chart_version }}
     steps:
       - name: Checkout helm repo
         uses: actions/checkout@v4
@@ -155,11 +157,9 @@ jobs:
       - name: Setup Helm
         uses: azure/setup-helm@v4
       - name: Update Chart.yaml appVersion
+        id: update_chart
         run: |
-          tag_name="${GITHUB_REF_NAME}"
-          tag_name="test"
-          tag_date="$(date +'%d%m%y')"
-          image_tag="${tag_name}-${tag_date}"
+          image_tag="${{ needs.init.outputs.image_tag }}"
           chart_dir="helm-sources/football-app"
           if [ ! -f "${chart_dir}/Chart.yaml" ]; then
             echo "Chart.yaml not found"
@@ -173,6 +173,7 @@ jobs:
           sed -i -E "s/^version:.*/version: \"${chart_version}\"/" "${chart_dir}/Chart.yaml"
           echo "Updated appVersion to ${image_tag}"
           echo "Updated version to ${chart_version}"
+          echo "chart_version=${chart_version}" >> "$GITHUB_OUTPUT"
       - name: Package chart and update index
         run: |
           chart_dir="helm-sources/football-app"
@@ -194,32 +195,83 @@ jobs:
           git config user.email "github-actions@users.noreply.github.com"
           git config user.name "github-actions"
           git add helm-sources/football-app/Chart.yaml helm-releases/index.yaml helm-releases/*.tgz
-          git commit -m "chore: bump appVersion to ${GITHUB_REF_NAME}-$(date +'%d%m%y')"
+          git commit -m "[GITHUB ACTION: NEW HELM CHART] update appVersion to ${{ needs.init.outputs.image_tag }}"
           git push
 
   notify_with_results:
     runs-on: ubuntu-latest
-    needs: [init, tests, validate, build, smoke_test, update_helm]
+    needs: [init, tests, validate, build, integration_test, update_helm]
     if: always()
     steps:
+      - name: Collect job results
+        id: job_results
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const runId = context.runId;
+            const { data } = await github.rest.actions.listJobsForWorkflowRun({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              run_id: runId,
+              per_page: 100,
+            });
+            const results = [];
+            for (const job of data.jobs) {
+              let seconds = null;
+              if (job.started_at && job.completed_at) {
+                const start = new Date(job.started_at).getTime();
+                const end = new Date(job.completed_at).getTime();
+                seconds = Math.max(0, Math.round((end - start) / 1000));
+              }
+              results.push({
+                name: job.name,
+                status: job.conclusion || job.status,
+                duration: seconds,
+              });
+            }
+            core.setOutput('results', JSON.stringify(results));
 
       - name: Send slack notification
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SECRET_SLACK_WEBHOOK_URL }}
-          TESTS_RESULT: ${{ needs.tests.result }}
-          VALIDATION_RESULT: ${{ needs.validate.result }}
-          BUILD_RESULT: ${{ needs.build.result }}
-          SMOKE_RESULT: ${{ needs.smoke_test.result }}
-          HELM_RESULT: ${{ needs.update_helm.result }}
+          RESULTS_JSON: ${{ steps.job_results.outputs.results }}
+          IMAGE_TAG: ${{ needs.init.outputs.image_tag }}
+          CHART_VERSION: ${{ needs.update_helm.outputs.chart_version }}
+          HELM_JOB_RESULT: ${{ needs.update_helm.result }}
+          BUILD_JOB_RESULT: ${{ needs.build.result }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
+          status_emoji() {
+            case "$1" in
+              success) echo "🟢" ;;
+              failure) echo "🔴" ;;
+              skipped) echo "⚪" ;;
+              *) echo "🟡" ;;
+            esac
+          }
+          format_job_result() {
+            local name="$1"
+            local status="$2"
+            local duration="$3"
+            local emoji=$(status_emoji "$status")
+            if [ -n "$duration" ] && [ "$duration" != "null" ]; then
+              printf "%s: %s %s (%ss)\n" "$name" "$emoji" "$status" "$duration"
+            else
+              printf "%s: %s %s\n" "$name" "$emoji" "$status"
+            fi
+          }
           message="CI results for ${GITHUB_REPOSITORY} @ ${GITHUB_REF_NAME}\n"
           message+="Run: ${RUN_URL}\n"
-          message+="Tests: ${TESTS_RESULT}\n"
-          message+="Validation: ${VALIDATION_RESULT}\n"
-          message+="Build: ${BUILD_RESULT}\n"
-          message+="Smoke: ${SMOKE_RESULT}\n"
-          message+="Helm: ${HELM_RESULT}"
+          if [ "$BUILD_JOB_RESULT" = "success" ]; then
+            message+="New Docker Images tag: ${IMAGE_TAG}\n"
+          fi
+          if [ "$HELM_JOB_RESULT" = "success" ] && [ -n "$CHART_VERSION" ]; then
+            message+="New Helm chart version: ${CHART_VERSION}\n"
+          fi
+          message+="\nJob details:\n"
+          echo "$RESULTS_JSON" | jq -r '.[] | [.name, .status, .duration] | @tsv' | while IFS=$'\t' read -r name status duration; do
+            message+=$(format_job_result "$name" "$status" "$duration")
+          done
           message_body_pattern='{"text":"%s"}'
           message_body=$(printf "${message_body_pattern}" "${message}")
           curl -X POST -H 'Content-type: application/json' --data "${message_body}" ${SLACK_WEBHOOK_URL}
