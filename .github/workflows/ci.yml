@@ -125,10 +125,10 @@ jobs:
           echo "Pushing image ${image_name}:${image_tag}"
           docker push "${image_name}:${image_tag}"
 
-  integration_test:
+    integration_test:
     name: Run Integration Tests
     runs-on: ubuntu-latest
-    needs: build
+    needs: [build, init]
     steps:
       - uses: actions/checkout@v4
       - name: Smoke test images
@@ -145,7 +145,7 @@ jobs:
   update_helm:
     name: Update Helm Repo
     runs-on: ubuntu-latest
-    needs: integration_test
+    needs: [integration_test, init]
     outputs:
       chart_version: ${{ steps.update_chart.outputs.chart_version }}
     steps:
@@ -299,14 +299,14 @@ jobs:
             fi
           }
           message="----------------------\n*CI results for ${GITHUB_REPOSITORY} @ ${GITHUB_REF_NAME}*\n"
-          message+="Run: ${RUN_URL}\n"
+          message+="*Run:* ${RUN_URL}\n"
           if [ "$BUILD_JOB_RESULT" = "success" ]; then
-            message+="New Docker Images tag: ${IMAGE_TAG}\n"
+            message+="*New Images Tag:* ${IMAGE_TAG}\n"
           fi
           if [ "$HELM_JOB_RESULT" = "success" ] && [ -n "$CHART_VERSION" ]; then
-            message+="New Helm chart version: ${CHART_VERSION}\n"
+            message+="*New Helm chart version:* ${CHART_VERSION}\n"
           fi
-          message+="\nJob details:\n"
+          message+="\n*Job details:*\n"
           lines=$(echo "$RESULTS_JSON" | jq -r '.[] | [.name, .status, .duration] | @tsv')
           while IFS=$'\t' read -r name status duration; do
             message+="$(format_job_result "$name" "$status" "$duration")\n"
