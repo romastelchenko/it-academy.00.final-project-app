@@ -309,7 +309,7 @@ jobs:
           message+="\nJob details:\n"
           lines=$(echo "$RESULTS_JSON" | jq -r '.[] | [.name, .status, .duration] | @tsv')
           while IFS=$'\t' read -r name status duration; do
-            message+=$(format_job_result "$name" "$status" "$duration")
+            message+="$(format_job_result "$name" "$status" "$duration")\n"
           done <<< "$lines"
           message_body_pattern='{"text":"%s"}'
           message_body=$(printf "${message_body_pattern}" "${message}")
