@@ -298,7 +298,7 @@ jobs:
               printf "%s: %s %s\n" "$name" "$emoji" "$status"
             fi
           }
-          message="CI results for ${GITHUB_REPOSITORY} @ ${GITHUB_REF_NAME}\n"
+          message="----------------------\n*CI results for ${GITHUB_REPOSITORY} @ ${GITHUB_REF_NAME}*\n"
           message+="Run: ${RUN_URL}\n"
           if [ "$BUILD_JOB_RESULT" = "success" ]; then
             message+="New Docker Images tag: ${IMAGE_TAG}\n"
