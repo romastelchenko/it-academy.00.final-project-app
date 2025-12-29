@@ -155,7 +155,8 @@ export function PlayersPage() {
                     {player.nickname}
                   </Typography>
                   <Typography variant="caption" color="text.secondary">
-                    {player.firstName} {player.lastName} · #{player.shirtNumber} · {player.rating}
+                    {player.firstName} {player.lastName} · #{player.shirtNumber} · {player.rating} ·{' '}
+                    {player.positionOnField || 'UNKNOWN'}
                   </Typography>
                 </Box>
                 <Stack direction="row" spacing={1} alignItems="center">
