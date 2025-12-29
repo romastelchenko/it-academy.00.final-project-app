@@ -31,6 +31,7 @@ const schema = z.object({
   lastName: z.string().min(1),
   shirtNumber: z.coerce.number().int().positive(),
   rating: z.coerce.number().int().min(0).max(100),
+  positionOnField: z.string().min(1),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -110,6 +111,7 @@ export function PlayersPage() {
       lastName: player.lastName,
       shirtNumber: player.shirtNumber,
       rating: player.rating,
+      positionOnField: player.positionOnField ?? 'UNKNOWN',
     });
     setOpen(true);
   };
@@ -124,7 +126,7 @@ export function PlayersPage() {
             variant="contained"
             onClick={() => {
               setEditingId(null);
-              reset();
+              reset({ positionOnField: 'UNKNOWN' });
               setOpen(true);
             }}
           >
@@ -193,6 +195,11 @@ export function PlayersPage() {
             <TextField label="Last name" {...register('lastName')} error={!!formState.errors.lastName} />
             <TextField label="Shirt number" type="number" {...register('shirtNumber')} error={!!formState.errors.shirtNumber} />
             <TextField label="Rating" type="number" {...register('rating')} error={!!formState.errors.rating} />
+            <TextField
+              label="Position on field"
+              {...register('positionOnField')}
+              error={!!formState.errors.positionOnField}
+            />
           </Stack>
         </DialogContent>
         <DialogActions>

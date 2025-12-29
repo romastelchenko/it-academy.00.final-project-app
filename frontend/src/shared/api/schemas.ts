@@ -7,6 +7,7 @@ export const PlayerSchema = z.object({
   lastName: z.string(),
   shirtNumber: z.number(),
   rating: z.number(),
+  positionOnField: z.string(),
   deletedAt: z.string().nullable().optional(),
 });
 

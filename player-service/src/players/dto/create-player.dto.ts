@@ -1,4 +1,4 @@
-import { IsInt, IsNotEmpty, IsString, Max, Min } from 'class-validator';
+import { IsInt, IsNotEmpty, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class CreatePlayerDto {
   @IsString()
@@ -21,4 +21,8 @@ export class CreatePlayerDto {
   @Min(0)
   @Max(100)
   rating!: number;
+
+  @IsString()
+  @IsOptional()
+  positionOnField?: string;
 }
